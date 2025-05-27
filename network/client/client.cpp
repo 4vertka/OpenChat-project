@@ -1,4 +1,6 @@
 #include "socket_utils.h"
+#include <string>
+#include <sys/socket.h>
 
 int main() {
 
@@ -7,18 +9,26 @@ int main() {
   struct addrinfo *server_info =
       sock_u.create_address("127.0.0.1", sock_u.port.c_str());
 
-  int socketFD = sock_u.create_socket(server_info);
+  int client_socket = sock_u.create_socket(server_info);
 
-  int conn = connect(socketFD, server_info->ai_addr, server_info->ai_addrlen);
+  int conn =
+      connect(client_socket, server_info->ai_addr, server_info->ai_addrlen);
 
   if (conn == 0)
     std::cout << "success\n";
 
-  const char *message = "hello";
-  send(socketFD, message, strlen(message), 0);
+  std::string buffer_send;
 
-  char buffer_receive[1024];
-  recv(socketFD, buffer_receive, sizeof(buffer_receive), 0);
+  while (true) {
+    std::getline(std::cin, buffer_send);
 
-  std::cout << "response was " << buffer_receive << '\n';
+    if (buffer_send == "exit")
+      break;
+
+    int client_send =
+        send(client_socket, buffer_send.c_str(), buffer_send.length(), 0);
+  }
+
+  close(client_socket);
+  shutdown(client_socket, SHUT_RDWR);
 }
