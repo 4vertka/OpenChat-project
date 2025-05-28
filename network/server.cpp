@@ -3,6 +3,7 @@
 #include <csetjmp>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <netdb.h>
 #include <string>
 #include <sys/socket.h>
@@ -16,14 +17,19 @@ struct accepted_socket {
   bool accepted_successfull;
 };
 
+std::vector<struct accepted_socket> accepted_sockets(10);
+
+// struct accepted_socket accepted_sockets[10];
+int accepted_sockets_count = 0;
+
 struct accepted_socket *client_handle_thread(int server_socket);
 void receive_data_client(int socket_fd);
 void start_accepting_connections(int server_socket_fd);
 void receive_on_separate_thread(int client_socket_fd);
+void send_receive_to_others(char buffer[], int socket_fd);
 
 int main() {
   socket_utils sock_u;
-  // struct sockaddr_storage their_addr;
   int server_socket_fd;
   int yes = 1;
 
@@ -85,16 +91,16 @@ struct accepted_socket *client_handle_thread(int server_socket) {
 
 void receive_data_client(int socket_fd) {
 
-  std::vector<char> buffer_receive(1024);
+  char buffer[1024];
 
   while (true) {
-    std::string message{""};
-    int server_recv =
-        recv(socket_fd, &buffer_receive[0], buffer_receive.size(), 0);
+    int server_recv = recv(socket_fd, buffer, sizeof(buffer), 0);
     if (server_recv > 0) {
-      message.append(buffer_receive.cbegin(),
-                     buffer_receive.cend() + server_recv);
-      std::cout << "data received: " << message << '\n';
+      buffer[server_recv] = 0;
+      std::cout << "data received: " << buffer << '\n';
+
+      send_receive_to_others(buffer, server_recv);
+
     } else if (server_recv == 0) {
       std::cout << "connection closed\n";
       break;
@@ -107,11 +113,24 @@ void receive_data_client(int socket_fd) {
   close(socket_fd);
 }
 
+void send_receive_to_others(char buffer[], int socket_fd) {
+
+  for (int i = 0; i < accepted_sockets_count; i++) {
+    if (accepted_sockets.at(i).accepted_socket_fd != socket_fd) {
+      send(accepted_sockets.at(i).accepted_socket_fd, buffer, strlen(buffer),
+           0);
+    }
+  }
+}
+
 void start_accepting_connections(int server_socket_fd) {
 
   while (true) {
     struct accepted_socket *accepted_socket_client =
         client_handle_thread(server_socket_fd);
+
+    accepted_sockets.at(accepted_sockets_count++) = *accepted_socket_client;
+
     receive_on_separate_thread(accepted_socket_client->accepted_socket_fd);
   }
 }
